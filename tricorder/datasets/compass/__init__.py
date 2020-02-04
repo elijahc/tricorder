@@ -1,68 +1,10 @@
+# datasets.compass
+
 import os
 import numpy as np
 import pandas as pd
 from .utils import load_table, isnum, isthresh, search
-from .compass_raw import preprocess_encounters, preprocess_procedures, preprocess_labs
-
-SEARCH_COLS = {
-    'Table1_Encounter_Info.csv': None,
-    'Table2_Flowsheet.csv' : 'display_name',
-    'Table3_Lab.csv' : 'lab_component_name',
-    'Table6_Procedures.csv' : 'order_name',
-}
-
-class Table(object):
-    def __init__(self, raw_path, preprocess_func=None):
-        self.file_path = raw_path
-        self.data_root, self.table_fn = os.path.split(self.file_path)
-        self.default_col = None
-        if self.table_fn in SEARCH_COLS.keys():
-            self.default_col = SEARCH_COLS[self.table_fn]
-        
-        self.preprocess = preprocess_func
-        self.df = None
-
-    def load_table(self, force_reload=False):
-        if self.df is None or force_reload:
-            tab = load_table(self.data_root,self.table_fn)
-            if self.preprocess is not None:
-                tab = self.preprocess(tab)
-            self.df = tab
-                
-        return self.df
-        
-    def search(self, query, column = None):
-        if column is None and self.default_col is None:
-            raise ValueError('No default search column specified, must provide column to search in column argument')
-        elif column is None and self.default_col is not None:
-            column = self.default_col
-    
-        search_col = self.load_table()[column].drop_duplicates()
-            
-        return search(query, search_col)
-    
-    def sel(self, *args, inclusive='all', **kwargs):
-        if len(args) == 1 and len(kwargs.keys()) < 1 and self.default_col is None:
-            raise ValueError('No default search column specified, must query in form of sel(column=[val1, val2, val3...])')
-        elif len(args) == 1 and self.default_col is not None:
-            kwargs = {
-                self.default_col : args[0]
-            }
-            
-        table = self.load_table()
-        
-        bin_masks = [table[k].isin(v).values for k,v in kwargs.items()]
-        if inclusive == 'all':
-            iter_mask = [True]*len(bin_masks[0])
-            for m in bin_masks:
-                iter_mask = np.logical_and(iter_mask, m)
-            mask = iter_mask
-        
-        return table[mask]
-    
-    def columns(self):
-        return self.load_data().columns
-        
+from .preprocessing import preprocess_encounters, preprocess_procedures, preprocess_labs, preprocess_flowsheet
 
 class SWAN(object):
     def __init__(self,root_dir):
@@ -72,11 +14,15 @@ class SWAN(object):
         self.encounters = Table(os.path.join(self.raw_dir,'Table1_Encounter_Info.csv'),
                                 preprocess_func=preprocess_encounters
                                )
+
+        self.flowsheet = Table(os.path.join(self.raw_dir, 'Table2_Flowsheet.csv'),
+                               preprocess_func=preprocess_flowsheet,
+                              )
+        
         self.labs = Table(os.path.join(self.raw_dir, 'Table3_Lab.csv'),
                           preprocess_func=preprocess_labs
                          )
         
-        self.flowsheet = Table(os.path.join(self.raw_dir, 'Table2_Flowsheet.csv'))
         self.procedures = Table(os.path.join(self.raw_dir,'Table6_Procedures.csv'),
                                 preprocess_func=preprocess_procedures
                                )
@@ -148,19 +94,68 @@ class SWAN(object):
                 flow_df = self.flowsheet.sel(display_name=flowsheet)
                 flow_df['day'] = flow_df.flowsheet_days_since_birth
                 
+                
+            flow_df = flow_df.rename(columns={
+                'flowsheet_days_since_birth' : 'days_from_dob',
+                'display_name' : 'name',
+                'flowsheet_value': 'value',
+                'flowsheet_unit' : 'unit',
+                'flowsheet_time' : 'time',
+                })
+            
+            time_cols = ['days_from_dob','day','time']
+            col_order.extend(time_cols)
+            
+            result_cols = ['name','value','unit']
+            col_order.extend(result_cols)
+            
+            print('Found {} rows from flowsheet table matching flowsheet filter'.format(len(flow_df)))
+            
             out_dfs.append(flow_df)
             
-        results = pd.concat(out_dfs)
+        results = pd.concat(out_dfs, sort=True).astype({'value':np.float64,'day':np.int32, 'days_from_dob':np.int32})
+        
+#         hr_in_days = int(results.time.values.split(':')[0])/24.0
+#         results.day = 
+        
+        if proc_df is None:
+            id_cols = ['encounter_id']
+        elif lab_df is not None or flow_df is not None:
+            id_cols = ['procedure', 'person_id','encounter_id']
+            time_cols = ['days_from_dob','day','time']
+            result_cols = ['name','value','unit']
         
         results = results.merge(enc_df[['encounter_id','death_during_encounter']], on='encounter_id')
-        
+                
+        col_order = []
+        for cols in [id_cols,time_cols,result_cols]:
+            col_order.extend(cols)
+            
+        col_order.append('death_during_encounter')
+            
         for df in [proc_df, lab_df, flow_df, enc_df]:
             if isinstance(df, pd.DataFrame):
                 del df
         
         return results[col_order]
         
-        def pivot_table(self, procedures=None, labs=None, flowsheet=None):
-            pass
+    def pivot_table(self, procedures=None, labs=None, flowsheet=None, time_unit='day'):
+        results = self.sel(procedures=procedures, labs=labs, flowsheet=flowsheet)
             
+        if time_unit not in results.columns:
+            raise ValueError('{} not amongst columns: {}'.format(time_unit, str(results.columns.values)))
+        else:
+            res_piv = results.pivot_table(values='value', index=['encounter_id',time_unit], columns='name').reset_index()
+        exclude = ['hour','day','minute','time','procedure','days_from_dob','name','value','unit']
+        other_cols = [col for col in results.columns.values if col not in exclude] 
             
+        res_piv = res_piv.merge(results[other_cols],on='encounter_id')
+
+        return res_piv
+    
+class Query(object):
+    def __init__(self, dataset):
+        self.compass_data = compass_dataset
+        self.procedures = procedures
+        self.labs = labs
+        self.flowsheet = flowsheet

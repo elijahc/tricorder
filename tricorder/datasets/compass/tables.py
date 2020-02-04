@@ -8,7 +8,7 @@ SEARCH_COLS = {
     'Table1_Encounter_Info.csv': None,
     'Table2_Flowsheet.csv' : 'display_name',
     'Table3_Lab.csv' : 'lab_component_name',
-    'Table6_Procedures.csv' : 'order_name',
+    'Table6_Procedure.csv' : 'order_name',
 }
 
 RAW_DTYPES = {
@@ -33,7 +33,7 @@ RAW_DTYPES = {
 #         'lab_result_unit' : str,
 #         'lab_collection_days_since_birth': np.uint
     
-    }, 'Table6_Procedures.csv' : None,
+    }, 'Table6_Procedure.csv' : None,
 }
 
 NEW_COLUMNS = {
@@ -52,7 +52,7 @@ NEW_COLUMNS = {
         'lab_result_unit' : 'unit',
         'lab_collection_time' : 'time'
     
-    }, 'Table6_Procedures.csv' : {
+    }, 'Table6_Procedure.csv' : {
         'order_name' : 'procedure'
     },
 }

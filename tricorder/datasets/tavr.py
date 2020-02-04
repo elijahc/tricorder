@@ -5,10 +5,10 @@ from .compass.utils import load_table, isnum, isthresh, add_hour, add_minute
 from .compass.preprocessing import *
 from .compass.tables import Table
 
-class SWAN(object):
+class TAVR(object):
     def __init__(self,root_dir):
         self.root = root_dir
-        self.raw_dir = os.path.join(self.root, 'raw', 'SWAN')
+        self.raw_dir = os.path.join(self.root, 'raw', 'TAVR')
         
         self.encounters = Table(os.path.join(self.raw_dir,'Table1_Encounter_Info.csv'),
                                 preprocess_func=preprocess_encounters

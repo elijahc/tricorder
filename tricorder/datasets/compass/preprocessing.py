@@ -66,6 +66,9 @@ def preprocess_labs(df):
     
     df = coerce(df,'lab_result_unit',['10^9/L', '10 9/L', '10*9/L'], '10^9/L')
     df['lab_component_name'] = df.lab_component_name.transform(lambda s: s.upper())
+    
+    df = df[~df.lab_collection_days_since_birth.isin([">32,507.25"]).values]
+
     return df
 
 def preprocess_flowsheet(df):

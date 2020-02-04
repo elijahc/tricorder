@@ -35,6 +35,40 @@ def extract_numeric(df,cols):
 def preprocess_encounters(df):
     df = df[~df.encounter_id.isna()]
     df['encounter_id']=df['encounter_id'].astype(int)
+    df['death_during_encounter'] = df.death_during_encounter.replace({0:False,1:True})
+    return df
+
+def preprocess_procedures(df):
+    print('cleaning...')
+    procs = df[~df.encounter_id.isna()]
+    procs['encounter_id']=procs['encounter_id'].astype(int)
+    
+    # Filter imprecise dates
+    print('   Filtering imprecise procstart dates')
+    procs = procs[~procs.days_from_dob_procstart.isin([">32507"]).values]
+            
+    # Convert values to numeric
+    print('   Filtering non-numeric procstart dates')
+    procs,junk = extract_numeric(procs,['days_from_dob_procstart'])
+    procs = procs.dropna()
+            
+    # Filter negative days
+    print('   Filtering negative procstart dates')
+    procs = procs[procs.days_from_dob_procstart>0]
+    procs['days_from_dob_procstart'] = procs.days_from_dob_procstart.astype(np.uint)
+    return procs
+
+def coerce(df, column, input_vals, output):
+    replace_dict = {k:output for k in input_vals}
+    df[column] = df[column].replace(replace_dict)
+    return df
+
+def preprocess_labs(df):
+    print('cleaning...')
+    df,junk = extract_numeric(df,['lab_result_value'])
+    print('removed {} rows'.format(len(junk)))
+    
+    df = coerce(df,'lab_result_unit',['10^9/L', '10 9/L', '10*9/L'], '10^9/L')
     return df
 
 class SWAN(object):
@@ -61,11 +95,7 @@ class SWAN(object):
         if drop_na:
             labs = labs.dropna()
         if preprocess:
-            print('cleaning...')
-            labs,junk = extract_numeric(labs,['lab_result_value'])
-            
-            print('removed {} rows'.format(len(junk)))
-            return labs
+            preprocess_labs(labs)
         else:
             return labs
     
@@ -78,20 +108,9 @@ class SWAN(object):
 #                                'days_from_dob_procstart':int,
                                   })
         if preprocess:
-            procs = preprocess_encounters(procs)
-#             procs[~procs.days_from_dob_procstart.transform(isthresh)]
-            # Filter imprecise dates
-            procs = procs[~procs.days_from_dob_procstart.isin([">32507"])]
-            
-            # Convert values to numeric
-            procs,junk = extract_numeric(procs,['days_from_dob_procstart'])
-            procs = procs.dropna()
-            
-            # Filter negative days
-            procs = procs[procs.days_from_dob_procstart>0]
-            procs['days_from_dob_procstart'] = procs.days_from_dob_procstart.astype(np.uint)
-        
-        return procs
+            return preprocess_procedures(procs)
+        else:
+            return procs
     
     def flowsheet(self,preprocess=True):
         flow = load_table(os.path.join(self.root,'raw','SWAN'), 'Table2_Flowsheet.csv')

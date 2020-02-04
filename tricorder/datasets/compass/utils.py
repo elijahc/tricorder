@@ -74,8 +74,8 @@ def add_minute(df):
 
     time_col = time_cols[0]
 
-    df['min'] = df[time_col].transform(lambda t: int(str(t).split(':')[1]))
-    df['min'] = df['hour']+(24*df.day)+(60*df.hour)
+    df['minute'] = df[time_col].transform(lambda t: int(str(t).split(':')[1]))
+    df['minute'] = df['hour']+(24*df.day)+(60*df.hour)
     return df
 
 def search(q,series):

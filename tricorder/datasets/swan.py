@@ -75,36 +75,24 @@ class SWAN(object):
         flow_df = None
         if isinstance(flowsheet, list) or isinstance(flowsheet, np.ndarray):
             if proc_df is not None:
+                procedure_encounters = proc_df.encounter_id.drop_duplicates().values
                 flow_df = self.flowsheet.sel(display_name=flowsheet, encounter_id=procedure_encounters)
                 flow_df = flow_df.merge(proc_df, on='encounter_id')
                 flow_df['day'] = flow_df.flowsheet_days_since_birth-flow_df.days_from_dob_procstart
-                
-                flow_df = flow_df.rename(columns={
-                    'order_name':'procedure',
-#                     'days_from_dob_procstart' : 'days_dob_procedure_start'
-                })
-                
-                id_cols = ['procedure', 'person_id', 'encounter_id']
-                col_order.extend(id_cols)
+
             else:
                 flow_df = self.flowsheet.sel(display_name=flowsheet)
                 flow_df['day'] = flow_df.flowsheet_days_since_birth
                 
-                
-            flow_df = flow_df.rename(columns={
-                'flowsheet_days_since_birth' : 'days_from_dob',
-                'display_name' : 'name',
-                'flowsheet_value': 'value',
-                'flowsheet_unit' : 'unit',
-                'flowsheet_time' : 'time',
-                })
-            
-            time_cols = ['days_from_dob','day','time']
-            col_order.extend(time_cols)
-            
-            result_cols = ['name','value','unit']
-            col_order.extend(result_cols)
-            
+            if rename_columns and self.flowsheet.new_columns is not None:
+                flow_df = flow_df.rename(columns = self.flowsheet.new_columns)
+#             flow_df = flow_df.rename(columns={
+#                 'flowsheet_days_since_birth' : 'days_from_dob',
+#                 'display_name' : 'name',
+#                 'flowsheet_value': 'value',
+#                 'flowsheet_unit' : 'unit',
+#                 'flowsheet_time' : 'time',
+#                 })
             print('Found {} rows from flowsheet table matching flowsheet filter'.format(len(flow_df)))
             
             out_dfs.append(flow_df)
@@ -122,7 +110,7 @@ class SWAN(object):
             results = pd.concat(out_dfs, sort=True)
             id_cols = ['person_id','encounter_id']
             time_cols = ['days_from_dob','day','time']
-            result_cols = ['name','value','unit']
+            result_cols = ['name','value']
             if proc_df is not None:
                 id_cols.append('procedure')
                 
@@ -143,8 +131,10 @@ class SWAN(object):
             raise ValueError('{} not amongst columns: {}'.format(time_unit, str(results.columns.values)))
         elif time_unit not in results.columns and time_unit is 'hour':
             results = add_hour(results)
+        elif time_unit not in results.columns and time_unit is 'minute':
+            results = add_minute(results)
             
-            res_piv = results.pivot_table(values='value', index=['encounter_id',time_unit], columns='name').reset_index()
+        res_piv = results.pivot_table(values='value', index=['encounter_id',time_unit], columns='name').reset_index()
         exclude = ['hour','day','minute','time','days_from_dob','name','value','unit']
         other_cols = [col for col in results.columns.values if col not in exclude] 
             

@@ -38,8 +38,14 @@ RAW_DTYPES = {
 
 NEW_COLUMNS = {
     'Table1_Encounter_Info.csv': None,
-    'Table2_Flowsheet.csv' : None,
-    'Table3_Lab.csv' : {
+    'Table2_Flowsheet.csv' : {
+        'flowsheet_days_since_birth' : 'days_from_dob',
+        'display_name' : 'name',
+        'flowsheet_value': 'value',
+#         'flowsheet_unit' : 'unit',
+        'flowsheet_time' : 'time',
+    
+    }, 'Table3_Lab.csv' : {
         'lab_collection_days_since_birth' : 'days_from_dob',
         'lab_component_name' : 'name',
         'lab_result_value': 'value',

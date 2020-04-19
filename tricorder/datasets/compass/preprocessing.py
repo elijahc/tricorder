@@ -46,13 +46,13 @@ def preprocess_procedures(df):
     # Convert values to numeric
     print('   Filtering non-numeric procstart dates')
     procs,junk = extract_numeric(procs,['days_from_dob_procstart'])
-    procs = procs.dropna()
+    procs = procs.dropna().astype({'days_from_dob_procstart':np.int})
             
     # Filter negative days
     print('   Filtering negative procstart dates')
     procs = procs[procs.days_from_dob_procstart>0]
 #     procs['days_from_dob_procstart'] = procs.days_from_dob_procstart.astype(np.uint)
-    return procs.astype({'encounter_id':np.int, 'days_from_dob_procstart':np.uint})
+    return procs.astype({'encounter_id':np.int, 'days_from_dob_procstart':np.int})
 
 def coerce(df, column, input_vals, output):
     replace_dict = {k:output for k in input_vals}

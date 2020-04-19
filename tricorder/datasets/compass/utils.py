@@ -57,7 +57,7 @@ def add_hour(df):
     time_col = time_cols[0]
 
     df['hour'] = df[time_col].transform(lambda t: int(str(t).split(':')[0]))
-    df['hour'] = df['hour']+(24*df.day)
+    df['hour'] = df['hour']+(24*df.day.astype(int))
     return df
 
 def add_minute(df):
@@ -74,8 +74,8 @@ def add_minute(df):
 
     time_col = time_cols[0]
 
-    df['minute'] = df[time_col].transform(lambda t: int(str(t).split(':')[1]))
-    df['minute'] = df['hour']+(24*df.day)+(60*df.hour)
+    minutes = np.array(df[time_col].transform(lambda t: int(str(t).split(':')[1])))
+    df['minute'] = minutes+(24*60*df.day.astype(int)).values+(60*df.hour).values
     return df
 
 def search(q,series):

@@ -33,7 +33,12 @@ RAW_DTYPES = {
 #         'lab_result_unit' : str,
 #         'lab_collection_days_since_birth': np.uint
     
-    }, 'Table6_Procedure.csv' : None,
+    }, 'Table6_Procedure.csv' : {
+#         'encounter_id':np.uint,
+        'order_name':str,
+#         'days_from_dob_procstart':np.uint,
+
+    },
 }
 
 NEW_COLUMNS = {
@@ -120,4 +125,3 @@ class Table(object):
 
     def columns(self):
         return self.load_table().columns
-    

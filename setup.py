@@ -32,7 +32,7 @@ setup(
     author="Elijah Christensen",
     author_email='elijah.christensen@cuanschutz.edu',
     url='https://github.com/elijahc/tricorder',
-    packages=find_packages(include=['tricorder']),
+    packages=find_packages(),
     entry_points={
         'console_scripts': [
             'tricorder=tricorder.cli:main',

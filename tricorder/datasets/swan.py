@@ -30,6 +30,22 @@ class SWAN(object):
                                 preprocess_func=preprocess_procedures
                                )
 
+    def stratify(self, procedures, name, bins, labels, flowsheet=None, operative_window='pre_op'):
+        
+        df = self.sel(procedures=procedures, flowsheet=[flowsheet], death_during_encounter=False)
+        
+        if operative_window == 'pre_op':
+            pv = df.query('day < 0').pivot_table(index='encounter_id',columns='name',values='value').dropna()
+           
+        col_name=operative_window+'_'+name
+#         pv[col_name] = 
+        out = pd.cut(pv[flowsheet],bins=bins,labels=labels)
+        del pv
+        del df
+        out.name = col_name
+        
+        return out.reset_index()
+    
     def sel(self, procedures=None, labs=None, flowsheet=None, rename_columns=True, demographics=False, death_during_encounter=True):
         enc_df = self.encounters.load_table()
         
@@ -69,12 +85,15 @@ class SWAN(object):
                 lab_df = lab_df.merge(enc_df[['encounter_id','death_during_encounter']], on='encounter_id')
                 lab_df['day'] = lab_df.lab_collection_days_since_birth
                         
+            lab_df['lab_collection_time'] = lab_df.lab_collection_time.apply(pd.to_timedelta)
             if rename_columns and self.labs.new_columns is not None:
                 lab_df = lab_df.rename(columns = self.labs.new_columns)
             
             print('Found {} rows from labs table matching labs filter'.format(len(lab_df)))
             
             out_dfs.append(lab_df)
+            
+            
             
         flow_df = None
         if isinstance(flowsheet, list) or isinstance(flowsheet, np.ndarray):
@@ -125,7 +144,7 @@ class SWAN(object):
         for df in [proc_df, lab_df, flow_df, enc_df]:
             if isinstance(df, pd.DataFrame):
                 del df
-
+        
         return results[col_order]
     
 @pd.api.extensions.register_dataframe_accessor("q")
@@ -137,7 +156,7 @@ class CompassAccessor:
     
     def icu_days(self, swan, agg=None):
         enc_ids = self.encounter_ids
-        df = swan.procedures.sel(encounter_id=enc_ids, order_name=icu_codes)
+        df = swan.procedures.sel(encounter_id=enc_ids, order_name=icu_codes).astype({'order_name':str})
         icu_days = df.groupby(['encounter_id','days_from_dob_procstart','order_name']).count().reset_index()
         icu_days = icu_days.sort_values(['encounter_id','days_from_dob_procstart']).rename(columns={'person_id':'icu_days'})
         if agg is not None:
@@ -211,7 +230,7 @@ class CompassAccessor:
         exclude = ['hour','day','minute','time','days_from_dob','name','value','unit']
         other_cols = [col for col in self._obj.columns.values if col not in exclude]
         
-        return self._obj.pivot_table(values=values, index=index, columns=columns)
+        return self._obj.astype({'name':str}).pivot_table(values=values, index=index, columns=columns)
         
     def rooms(self,swan):
         enc_ids = self.encounter_ids

@@ -1,6 +1,10 @@
 import os
 import numpy as np
 import pandas as pd
+import gc
+import multiprocessing
+import dask.dataframe as dd
+import dask
 from .utils import load_table, isnum, isthresh, search
 from .preprocessing import preprocess_encounters, preprocess_procedures, preprocess_labs, preprocess_flowsheet
 
@@ -15,7 +19,7 @@ RAW_DTYPES = {
     'Table1_Encounter_Info.csv': {
         'encounter_id': np.uint,
         'person_id': np.uint,
-        'gender': np.uint8,
+#         'gender': str,
         'age': np.uint8,
         'financial_class': str,
         'death_during_encounter': np.bool
@@ -34,7 +38,7 @@ RAW_DTYPES = {
 #         'lab_collection_days_since_birth': np.uint
     
     }, 'Table6_Procedure.csv' : {
-#         'encounter_id':np.uint,
+        'encounter_id':np.float,
         'order_name':str,
 #         'days_from_dob_procstart':np.uint,
 
@@ -66,7 +70,6 @@ class Table(object):
     def __init__(self, raw_path, preprocess_func=None, dtype=None, new_columns=None):
         self.file_path = raw_path
         self.data_root, self.table_fn = os.path.split(self.file_path)
-
         if self.table_fn in SEARCH_COLS.keys():
             self.default_col = SEARCH_COLS[self.table_fn]
         else:
@@ -79,12 +82,21 @@ class Table(object):
         self.new_columns = new_columns or NEW_COLUMNS[self.table_fn]
         self.df = None
 
-    def load_table(self, force_reload=False, rename=False):
-        if self.df is None or force_reload:
-            tab = load_table(self.data_root,self.table_fn, dtype=self.dtype)
-            if self.preprocess is not None:
-                tab = self.preprocess(tab)
-            self.df = tab
+    def load_table(self, force_reload=False, rename=False,load_func=pd.read_csv):
+        if self.df is None:
+            #Check if we've already preprocessed this
+            cache_fn = self.table_fn.split('.')[0]+'.parquet'
+            cache = os.path.join(self.data_root,cache_fn)
+            if not os.path.exists(cache) or force_reload:
+                tab = load_table(self.data_root,self.table_fn, load_func=load_func, dtype=self.dtype)
+                if self.preprocess is not None:
+                    self.df = self.preprocess(tab)
+                else:
+                    self.df = tab
+                del tab
+                gc.collect()
+            elif os.path.exists(cache) and force_reload==False:
+                self.df = load_table(self.data_root,cache_fn,load_func=pd.read_parquet, engine='pyarrow')
                 
         return self.df
         
@@ -93,7 +105,7 @@ class Table(object):
             raise ValueError('No default search column specified, must provide column to search in column argument')
         elif column is None and self.default_col is not None:
             column = self.default_col
-    
+        
         search_col = self.load_table()[column].drop_duplicates()
             
         return search(query, search_col)
@@ -107,18 +119,22 @@ class Table(object):
             }
             
         table = self.load_table()
+        if isinstance(table,dask.dataframe.core.DataFrame):
+            table = table.compute()
         
         bin_masks = [table[k].isin(v).values for k,v in kwargs.items()]
         if how == 'all':
-            iter_mask = [True]*len(bin_masks[0])
-            for m in bin_masks:
-                iter_mask = np.logical_and(iter_mask, m)
-            mask = iter_mask
-            
+            for k,v in kwargs.items():
+                table = table[table[k].isin(v)]
+#             iter_mask = [True]*len(bin_masks[0])
+#             for m in bin_masks:
+#                 iter_mask = np.logical_and(iter_mask, m)
+#             mask = iter_mask
+        out = table.copy()
         if rename_columns and self.new_columns is not None:
-            return table[mask].rename(columns = self.new_columns)
+            return table.rename(columns = self.new_columns)
         else:
-            return table[mask]
+            return table
         
     def rename(self, df):
         return 

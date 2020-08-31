@@ -55,8 +55,14 @@ def add_hour(df):
         df = add_day(df)
 
     time_col = time_cols[0]
-
-    df['hour'] = df[time_col].transform(lambda t: int(str(t).split(':')[0]))
+    
+    if isinstance(df[time_col].values[0],str):
+        df['hour'] = df[time_col].transform(lambda t: int(str(t).split(':')[0]))
+    elif isinstance(df[time_col].values[0],np.timedelta64):
+        df['hour'] = df[time_col].astype('timedelta64[h]')
+    else:
+        raise ValueError('do not recognize data type of {}'.format(time_col))
+        
     df['hour'] = df['hour']+(24*df.day.astype(int))
     return df
 

@@ -26,13 +26,13 @@ test_requirements = [
 
 setup(
     name='tricorder',
-    version='0.1.0',
+    version='0.2.1',
     description="Python package for simplifying analysis of COMPASS datasets",
     long_description=readme + '\n\n' + history,
     author="Elijah Christensen",
     author_email='elijah.christensen@cuanschutz.edu',
     url='https://github.com/elijahc/tricorder',
-    packages=find_packages(include=['tricorder']),
+    packages=find_packages(),
     entry_points={
         'console_scripts': [
             'tricorder=tricorder.cli:main',

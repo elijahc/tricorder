@@ -41,7 +41,7 @@ def preprocess_encounters(df):
     df['death_during_encounter'] = df.death_during_encounter.replace({0:False,1:True})
     
 #     if np.issubdtype(df.gender.dtype,np.dtype(int)):
-    df['gender'] = df.gender.replace({1:'M',2:'F'})
+    df['gender'] = df.gender.replace({1:'Male',2:'Female'})
 
     return df.astype({'encounter_id':np.uint, 'death_during_encounter':bool})
 

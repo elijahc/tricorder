@@ -85,7 +85,7 @@ class SWAN(object):
                 lab_df = lab_df.merge(enc_df[['encounter_id','death_during_encounter']], on='encounter_id')
                 lab_df['day'] = lab_df.lab_collection_days_since_birth
                         
-            lab_df['lab_collection_time'] = lab_df.lab_collection_time.apply(pd.to_timedelta)
+#             lab_df['lab_collection_time'] = lab_df.lab_collection_time.apply(pd.to_timedelta)
             if rename_columns and self.labs.new_columns is not None:
                 lab_df = lab_df.rename(columns = self.labs.new_columns)
             

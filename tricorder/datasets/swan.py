@@ -10,9 +10,9 @@ room_RN = lambda x: [s.split('ROOM CHG')[-1] for s in x.values]
 room_type = lambda x: [s.split('ROOM CHG')[0].split('HB ')[-1] for s in x.values]
 
 class SWAN(object):
-    def __init__(self,root_dir):
+    def __init__(self,root_dir, data_dir='raw/SWAN'):
         self.root = root_dir
-        self.raw_dir = os.path.join(self.root, 'raw', 'SWAN')
+        self.raw_dir = os.path.join(self.root, data_dir)
         
         self.encounters = Table(os.path.join(self.raw_dir,'Table1_Encounter_Info.csv'),
                                 preprocess_func=preprocess_encounters

@@ -27,7 +27,7 @@ RAW_DTYPES = {
     },'Table2_Flowsheet.csv' : {
         'encounter_id':np.uint,
         'flowsheet_days_since_birth': np.uint,
-        'flowsheet_time':str,
+#         'flowsheet_time':str,
         'display_name':str,
     
     }, 'Table3_Lab.csv' : {
@@ -88,7 +88,15 @@ class Table(object):
             cache_fn = self.table_fn.split('.')[0]+'.parquet'
             cache = os.path.join(self.data_root,cache_fn)
             if not os.path.exists(cache) or force_reload:
-                tab = load_table(self.data_root,self.table_fn, load_func=load_func, dtype=self.dtype)
+                try:
+                    tab = load_table(self.data_root,self.table_fn, load_func=load_func, dtype=self.dtype)
+                except ValueError as e:
+                    print('   Error loading table')
+                    print('   {}'.format(str(e)))
+                    print('   Loading without dtypes')
+                    print()
+                    tab = load_table(self.data_root,self.table_fn, load_func=load_func)
+                
                 if self.preprocess is not None:
                     self.df = self.preprocess(tab)
                 else:

@@ -5,6 +5,8 @@ import multiprocessing
 import datetime
 from .utils import load_table, isnum, isthresh
 
+BAD_INTS = ['>89', ">32507"]
+
 def conv_thresh(x):
     if x.strip().startswith('<'):
         return x.split('<')[-1]
@@ -38,25 +40,31 @@ def coerce(df, column, input_vals, output):
 
 def preprocess_encounters(df):
     df = df[~df.encounter_id.isna()]
-    df['death_during_encounter'] = df.death_during_encounter.replace({0:False,1:True})
+#     df['death_during_encounter'] = df.death_during_encounter.replace({0:False,1:True})
     
-#     if np.issubdtype(df.gender.dtype,np.dtype(int)):
-    df['gender'] = df.gender.replace({1:'Male',2:'Female'})
+    if df.gender.dtype.type in [np.int64,int,np.int,np.uint]:
+        df['gender'] = df.gender.replace({1:'Male',2:'Female'})
+        
+    if df.age.isin(BAD_INTS).any():
+        print('   coercing >89 -> 95')
+        df = coerce(df,'age',['>89'],'95')
 
     return df.astype({'encounter_id':np.uint, 'death_during_encounter':bool})
 
 def preprocess_procedures(df):
     print('cleaning...')
     procs = df.dropna()
-
-    # Filter imprecise dates
-    print('   Filtering imprecise procstart dates')
-    procs = procs[procs.days_from_dob_procstart != ">32507"]
-
+    bad_vals = []
+    
     # Convert values to numeric
-    print('   Filtering non-numeric procstart dates')
     procs,junk = extract_numeric(procs,'days_from_dob_procstart')
     procs = procs.dropna().astype({'days_from_dob_procstart':np.uint})
+    print('   Filtering non-numeric procstart dates')
+    
+    if procs.days_from_dob_procstart.isin(bad_vals).any():
+        # Filter imprecise dates
+        print('   Filtering imprecise procstart dates(>32507)')
+        procs = procs[procs.days_from_dob_procstart != ">32507"]
 
     # Filter negative days
     print('   Filtering negative procstart dates')
@@ -71,18 +79,19 @@ def preprocess_labs(df):
     print('cleaning...')
     labs = df.dropna()
     labs = labs[labs.lab_collection_days_since_birth != ">32,507.25"]
+    labs = labs[labs.lab_collection_days_since_birth != ">32507"]
 
     
     labs,junk = extract_numeric(labs,'lab_result_value')
     print('removed {} rows'.format(len(junk)))
     
     labs = coerce(labs,'lab_result_unit',['10^9/L', '10 9/L', '10*9/L'], '10^9/L')
-    labs['lab_component_name'] = labs.lab_component_name.apply(lambda s: s.upper(),meta=('lab_component_name','object')).astype('category')
+    labs['lab_component_name'] = labs.lab_component_name.apply(lambda s: s.upper()).astype('category')
     
     labs['lab_result_unit'] = labs.lab_result_unit.astype('category')
-    str_to_dt = lambda s: datetime.timedelta(**{k:int(v) for k,v in zip(['hours','minutes','seconds'], s.split(':'))})
+#     str_to_dt = lambda s: datetime.timedelta(**{k:int(v) for k,v in zip(['hours','minutes','seconds'], s.split(':'))})
     
-    labs['lab_collection_time'] = labs.lab_collection_time.apply(str_to_dt)
+#     labs['lab_collection_time'] = labs.lab_collection_time.apply(str_to_dt)
     
     del df
     return labs.astype({'encounter_id':np.uint,'lab_collection_days_since_birth':np.uint})
@@ -90,8 +99,12 @@ def preprocess_labs(df):
 def preprocess_flowsheet(df):
     print('cleaning...')
     df['flowsheet_value'] = pd.to_numeric(df.flowsheet_value,errors='coerce')
-    df['flowsheet_time'] = pd.to_timedelta(df.flowsheet_time)
+#     df['flowsheet_time'] = pd.to_timedelta(df.flowsheet_time)
     df['display_name'] = pd.Categorical(df.display_name,categories=df.display_name.drop_duplicates().values)
+    df['flowsheet_days_since_birth'] = df[df.flowsheet_days_since_birth != '>32507']
+    df = df.dropna()
+
+
 #     df,junk = extract_numeric(df,['flowsheet_value'])
 #     print('removed {} rows'.format(len(junk)))
     

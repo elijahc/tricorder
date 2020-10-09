@@ -5,14 +5,15 @@ from .compass.utils import load_table, isnum, isthresh, add_hour, add_minute
 from .compass.preprocessing import *
 from .compass.tables import Table
 from .compass.procedure_codesets import *
+from ..datasets import COMPASS_BASE
 
 room_RN = lambda x: [s.split('ROOM CHG')[-1] for s in x.values]
 room_type = lambda x: [s.split('ROOM CHG')[0].split('HB ')[-1] for s in x.values]
 
-class SWAN(object):
-    def __init__(self,root_dir, data_dir='raw/SWAN'):
+class SWAN(COMPASS_BASE):
+    def __init__(self,root_dir = '/data/compass/raw/SWAN'):
         self.root = root_dir
-        self.raw_dir = os.path.join(self.root, data_dir)
+        self.raw_dir = self.root
         
         self.encounters = Table(os.path.join(self.raw_dir,'Table1_Encounter_Info.csv'),
                                 preprocess_func=preprocess_encounters

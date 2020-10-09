@@ -23,7 +23,7 @@ def check_and_load(fp,load_func=pd.read_csv,**kwargs):
         return load_func(fp,**kwargs)
     else:
         print('File not found: \n',fp)
-        raise ValueError
+        raise IOError
 
 check_and_load_csv = check_and_load
 

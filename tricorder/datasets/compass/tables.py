@@ -11,6 +11,8 @@ from .preprocessing import preprocess_encounters, preprocess_procedures, preproc
 SEARCH_COLS = {
     'Table1_Encounter_Info.csv': None,
     'Table2_Flowsheet.csv' : 'display_name',
+    'Table2_Flowsheet_status.csv' : 'display_name',
+    'Table2_Flowsheet_numeric.csv' : 'display_name',
     'Table3_Lab.csv' : 'lab_component_name',
     'Table6_Procedure.csv' : 'order_name',
 }
@@ -25,6 +27,12 @@ RAW_DTYPES = {
         'death_during_encounter': np.bool
     
     },'Table2_Flowsheet.csv' : {
+        'encounter_id':np.uint,
+        'flowsheet_days_since_birth': np.uint,
+#         'flowsheet_time':str,
+        'display_name':str,
+        
+    },'Table2_Flowsheet_status.csv' : {
         'encounter_id':np.uint,
         'flowsheet_days_since_birth': np.uint,
 #         'flowsheet_time':str,
@@ -47,7 +55,13 @@ RAW_DTYPES = {
 
 NEW_COLUMNS = {
     'Table1_Encounter_Info.csv': None,
-    'Table2_Flowsheet.csv' : {
+    'Table2_Flowsheet_status.csv' : {
+        'flowsheet_days_since_birth' : 'days_from_dob',
+        'display_name' : 'name',
+        'flowsheet_value': 'value',
+#         'flowsheet_unit' : 'unit',
+        'flowsheet_time' : 'time',
+    }, 'Table2_Flowsheet.csv' : {
         'flowsheet_days_since_birth' : 'days_from_dob',
         'display_name' : 'name',
         'flowsheet_value': 'value',

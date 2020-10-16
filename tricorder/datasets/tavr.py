@@ -4,7 +4,7 @@ import pandas as pd
 from .compass.utils import load_table, isnum, isthresh, add_hour, add_minute
 from .compass.preprocessing import *
 from .compass.tables import Table
-from ..datasets import COMPASS_BASE
+from .compass_raw import COMPASS_BASE
 
 class TAVR(COMPASS_BASE):
     def __init__(self,root_dir = '/data/compass/raw/TAVR'):
@@ -14,7 +14,11 @@ class TAVR(COMPASS_BASE):
         self.encounters = Table(os.path.join(self.raw_dir,'Table1_Encounter_Info.csv'),
                                 preprocess_func=preprocess_encounters
                                )
-
+        
+        self.status = Table(os.path.join(self.raw_dir, 'Table2_Flowsheet_status.csv'),
+                            preprocess_func=preprocess_status,
+                           )
+        
         self.flowsheet = Table(os.path.join(self.raw_dir, 'Table2_Flowsheet.csv'),
                                preprocess_func=preprocess_flowsheet,
                               )

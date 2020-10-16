@@ -45,9 +45,9 @@ def preprocess_encounters(df):
     if df.gender.dtype.type in [np.int64,int,np.int,np.uint]:
         df['gender'] = df.gender.replace({1:'Male',2:'Female'})
         
-    if df.age.isin(BAD_INTS).any():
+    if df.age.isin(['>89']).any():
         print('   coercing >89 -> 95')
-        df = coerce(df,'age',['>89'],'95')
+        df = coerce(df,'age',['>89'],95)
 
     return df.astype({'encounter_id':np.uint, 'death_during_encounter':bool})
 
@@ -96,16 +96,38 @@ def preprocess_labs(df):
     del df
     return labs.astype({'encounter_id':np.uint,'lab_collection_days_since_birth':np.uint})
 
-def preprocess_flowsheet(df):
-    print('cleaning...')
-    df['flowsheet_value'] = pd.to_numeric(df.flowsheet_value,errors='coerce')
-#     df['flowsheet_time'] = pd.to_timedelta(df.flowsheet_time)
-    df['display_name'] = pd.Categorical(df.display_name,categories=df.display_name.drop_duplicates().values)
-    df['flowsheet_days_since_birth'] = df[df.flowsheet_days_since_birth != '>32507']
+def preprocess_status(df):
     df = df.dropna()
-
-
-#     df,junk = extract_numeric(df,['flowsheet_value'])
-#     print('removed {} rows'.format(len(junk)))
     
+    df = coerce(df, 'flowsheet_days_since_birth', ['>32507','>32,507.25'], 34697)
+    df.flowsheet_days_since_birth = df.flowsheet_days_since_birth.astype(np.uint64)
+
+    df.display_name = df.display_name.astype('category')
+
+    numeric_idxs = df.flowsheet_value.apply(isnum)
+    df = df[~numeric_idxs]
+    df = df.dropna()
+        
     return df
+
+def preprocess_flowsheet(df, split_numeric=True):
+    print('cleaning...')
+    #     df['flowsheet_time'] = pd.to_timedelta(df.flowsheet_time)
+    
+    df = coerce(df, 'flowsheet_days_since_birth', ['>32507','>32,507.25'], 34697)
+    df.flowsheet_days_since_birth = df.flowsheet_days_since_birth.astype(np.uint64)
+#     df['flowsheet_days_since_birth'] = df[df.flowsheet_days_since_birth != '>32507']
+#     df['display_name'] = pd.Categorical(df.display_name,categories=df.display_name.drop_duplicates().values)
+    df.display_name = df.display_name.astype('category')
+
+    numeric_idxs = df.flowsheet_value.apply(isnum)
+    df = df[numeric_idxs]
+#         df,junk = extract_numeric(df,['flowsheet_value'])
+#         print('removed {} rows'.format(len(junk)))
+    df.flowsheet_value = pd.to_numeric(df.flowsheet_value,errors='coerce')
+    df = df.dropna()
+    return df
+
+
+
+

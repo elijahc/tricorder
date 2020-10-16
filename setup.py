@@ -26,7 +26,7 @@ test_requirements = [
 
 setup(
     name='tricorder',
-    version='0.2.2',
+    version='0.2.4',
     description="Python package for simplifying analysis of COMPASS datasets",
     long_description=readme + '\n\n' + history,
     author="Elijah Christensen",

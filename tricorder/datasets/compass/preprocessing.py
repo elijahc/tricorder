@@ -113,6 +113,7 @@ def preprocess_status(df):
 def preprocess_flowsheet(df, split_numeric=True):
     print('cleaning...')
     #     df['flowsheet_time'] = pd.to_timedelta(df.flowsheet_time)
+    df = df.dropna()
     
     df = coerce(df, 'flowsheet_days_since_birth', ['>32507','>32,507.25'], 34697)
     df.flowsheet_days_since_birth = df.flowsheet_days_since_birth.astype(np.uint64)

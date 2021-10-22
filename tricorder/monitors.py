@@ -28,7 +28,7 @@ swan_monitors = [
 ]
 
 flow_oxygenation = [
-    'SpO2',
+    'SPO2',
     'SVO2 (%)'
 ]
 

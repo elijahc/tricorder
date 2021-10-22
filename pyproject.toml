@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "tricorder"
+version = "0.3.1"
+description = ""
+authors = ["Elijah Christensen <ejd.christensen@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.7.1"
+pyspark = "^3.1.2"
+pyarrow = "^5.0.0"
+python-slugify = "^5.0.2"
+tableone = "^0.7.10"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+chispa = "^0.8.2"
+notebook = "^6.4.4"
+pandas = "^1.3.3"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

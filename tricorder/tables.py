@@ -67,7 +67,6 @@ RAW_DTYPES = {
     },
 }
 
-
 class Table(object):
     def __init__(self, raw_fp):
         self.file_path = raw_fp
@@ -95,7 +94,9 @@ class Table(object):
         Parameters
         ----------
         column : str
-                 column of database to shard with
+                 column of database to partition off of
+        overwrite : bool
+                 The default value of false will raise errors if there are existing files preventing overwrites
         """
         column = column or self.search_col
         out_dir = self._cache_path('.part')
@@ -118,6 +119,14 @@ class Table(object):
         return self.default_unique
         
     def search(self, query, column = None):
+        """Returns all entries of the specified column that match query
+        Parameters
+        ----------
+        query : str
+                 string to search column with
+        column : str
+                 Column to search for using query string, if none provided will search tables default column
+        """
         if column is None and self.default_col is None:
             raise ValueError('No default search column specified, must provide column to search in column argument')
         elif column is None and self.default_col is not None:

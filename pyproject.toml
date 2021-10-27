@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tricorder"
-version = "0.3.1"
+version = "0.4.0"
 description = ""
 authors = ["Elijah Christensen <ejd.christensen@gmail.com>"]
 
@@ -16,6 +16,9 @@ pytest = "^5.2"
 chispa = "^0.8.2"
 notebook = "^6.4.4"
 pandas = "^1.3.3"
+jupyter = "^1.0.0"
+ipython = "^7.28.0"
+seaborn = "^0.11.2"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

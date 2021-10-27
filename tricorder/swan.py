@@ -1,9 +1,12 @@
 import os
+from contextlib import contextmanager
+import numpy as np
 import pandas as pd
 import pyarrow
 import pyarrow.parquet as pq
 import tarfile
 from .tables import Table
+from .cohort import ProcedureCohort
 
 NEW_COLUMNS = {
     'Table1_Encounter_Info.csv': None,
@@ -32,6 +35,7 @@ NEW_COLUMNS = {
     },
 }
 
+
 class SWAN():
     def __init__(self, root_dir = '/data/compass/SWAN'):
         self.root = root_dir
@@ -47,6 +51,10 @@ class SWAN():
 
         self.diagnosis = Table(os.path.join(self.raw_dir,'Table7_DX.csv'))
 
+        self.transfusion = Table(os.path.join(self.raw_dir,'Table5_Blood_Transfusion.csv'))
+
+        self.medications = Table(os.path.join(self.raw_dir,'Table4_Administered_Medications.csv'))
+
     def sel(self, procedures, labs=None, flowsheet=None, encounter_id=None):
 
         output_col_order = [
@@ -55,7 +63,9 @@ class SWAN():
             'name','value']
         out_dfs = []
         # Grab list of encounters from procedures, then fetch labs and flowsheet data from those encounters
-        proc_df = self.procedures.sel(order_name=list(procedures)).astype({'days_from_dob_procstart':int}).rename(columns=NEW_COLUMNS[self.procedures.table_fn])
+        proc_df = self.procedures.sel(order_name=list(procedures))
+        proc_df.days_from_dob_procstart = pd.to_numeric(proc_df.days_from_dob_procstart, errors='coerce')
+        proc_df = proc_df.rename(columns=NEW_COLUMNS[self.procedures.table_fn])
         if encounter_id is not None:
             proc_df = proc_df[proc_df.encounter_id.isin(encounter_id)]
 
@@ -75,3 +85,10 @@ class SWAN():
 
         out_df = pd.concat(out_dfs, sort=True)
         return out_df[output_col_order]
+
+    @contextmanager
+    def cohort(self, procedures=None):
+        if procedures is not None:
+            yield ProcedureCohort(db=self,procedures=procedures)
+        else:
+            raise Exception('supply either procedure or')

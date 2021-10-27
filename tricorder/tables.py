@@ -16,12 +16,15 @@ SEARCH_COLS = {
     'Table3_Lab.csv' : 'lab_component_name',
     'Table6_Procedures.csv' : 'order_name',
     'Table7_DX.csv' : 'CodeDescription',
+    'Table5_Blood_Transfusion.csv' : 'transfusion_name',
+    'Table4_Administered_Medication.csv' : 'medication_name',
 }
 
 SANITIZE_COLS = {
     'Table1_Encounter_Info.csv': None,
     'Table2_Flowsheet.csv' : ['display_name','flowsheet_value'],
     'Table3_Lab.csv' : ['lab_component_name'],
+    'Table5_Blood_Transfusion.csv' : None,
     'Table6_Procedures.csv' : ['order_name'],
     'Table7_DX.csv' : ['CodeDescription'],
 }
@@ -33,7 +36,7 @@ RAW_DTYPES = {
 #         'gender': str,
         'age': np.uint8,
         'financial_class': str,
-        'death_during_encounter': np.bool
+        'death_during_encounter': bool
     
     },'Table2_Flowsheet.csv' : {
         'encounter_id':np.uint,
@@ -41,19 +44,25 @@ RAW_DTYPES = {
 #         'flowsheet_time':str,
         'display_name':str,
         
-    },'Table2_Flowsheet_status.csv' : {
-        'encounter_id':np.uint,
-        'flowsheet_days_since_birth': np.uint,
-#         'flowsheet_time':str,
-        'display_name':str,
-    
     }, 'Table3_Lab.csv' : {
         'encounter_id':np.uint,
         'lab_component_name': str,
         'lab_result_value' : str,
 #         'lab_result_unit' : str,
         'lab_collection_days_since_birth': np.uint
-    
+
+    }, 'Table4_Administered_Medication.csv' : {
+        'encounter_id':np.uint,
+        'administered_days_since_birth': int,
+        'administered_time': str,
+        'medication_name' : str,
+        #'dose': np.uint,
+
+    }, 'Table5_Blood_Transfusion.csv' : {
+        'encounter_id':np.uint,
+        'transfusion_name':str,
+#         'days_from_dob_procstart':np.uint,
+
     }, 'Table6_Procedures.csv' : {
         'encounter_id':np.uint,
         'order_name':str,
@@ -119,7 +128,7 @@ class Table(object):
         return self.default_unique
         
     def search(self, query, column = None):
-        """Returns all entries of the specified column that match query
+        """Returns all unique entries of the specified column that match query
         Parameters
         ----------
         query : str
@@ -146,6 +155,9 @@ class Table(object):
             if 'days_from' in n or 'days_since' in n:
                 mask = pc.invert(pc.starts_with(tab.column(n),pattern='>'))
                 tab = tab.filter(mask)
+
+                mask = pc.utf8_is_numeric(tab.column(n))
+                tab = tab.filter(mask)
         return tab
 
     def load_csv(self,**kwargs):
@@ -163,17 +175,17 @@ class Table(object):
             # self.df = load_table(self.data_root,self.table_fn.replace('csv','part'), load_func=pq.read_table()).to_pandas()
             # self.df = load_table(self.data_root,self.table_fn.replace('csv','parquet'), load_func=pd.read_parquet(),engine='pyarrow')
 
-    def sel(self, *args, how='all', cache=True, rename_columns=False, **kwargs):
+    def sel(self, *args, cache=True, pivot=False, rename_columns=False, **kwargs):
         if len(args) == 1 and len(kwargs.keys()) < 1 and self.default_col is None:
             raise ValueError('No default search column specified, must query in form of sel(column=[val1, val2, val3...])')
         elif len(args) == 1 and self.default_col is not None:
             kwargs = {
                 self.default_col : args[0]
             }
-            
+        kwargs = {k:v for k,v in kwargs.items() if v is not None}
+
         if cache and self._cache_exists():
             if os.path.exists(self._cache_path('.part')):
-                print('Partioned cache detected')
                 df = self.partition_load(*args, **kwargs)
             elif os.path.exists(self._cache_path('.parquet')):
                 print('Parquet cache detected')
@@ -181,7 +193,18 @@ class Table(object):
         else:
             df = self.load_csv(**kwargs)
 
-        return df.astype(RAW_DTYPES[self.table_fn])
+        try:
+            df = df[~df.encounter_id.isna()]
+            df = df.astype(RAW_DTYPES[self.table_fn])
+        except:
+            print('error converting dataframe to RAW_DTYPES')
+            pass
+
+        if pivot:
+            df.flowsheet_value = df.flowsheet_value.replace({'':np.nan}).astype(float)
+            df = df.pivot_table(index=['encounter_id','flowsheet_days_since_birth'],columns='display_name',values='flowsheet_value')
+        return df
+
         # if how == 'all':
         #     for k,v in kwargs.items():
         #         table = table[table[k].isin(v)]

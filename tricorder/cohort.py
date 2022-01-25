@@ -1,10 +1,38 @@
 import numpy as np
 import pandas as pd
+import json
+from .outcome_metrics import tidy_labs
 from .outcome_utils import mpog_aki
 from .codesets_ICD10 import cad,stroke
 
+class CohortMetrics(object):
+    def __init__(self):
+        self.metrics = []
+    
+    def __str__(self):
+        return str(self.metrics)
+    
+    def __repr__(self):
+        print('CohortMetrics')
+        for m in self.metrics:
+            print('- {}'.format(str(m.__class__.classname)))
+        return self.__str__()
+
+class CohortOutcomes(object):
+    def __init__(self):
+        self._outcomes = []
+    
+    def __str__(self):
+        return str(self._outcomes)
+    
+    def __repr__(self):
+        print('CohortOutcomes')
+        for o in self._outcomes:
+            print('- {}'.format(str(o.__class__.classname)))
+        return self.__str__()
+    
 class ProcedureCohort(object):
-    def __init__(self, db, procedures, person_id=None, encounter_id=None):
+    def __init__(self, db, procedures, person_id=None, encounter_id=None, metrics=[]):
         self.db = db
         self.procedures = procedures
 
@@ -21,12 +49,24 @@ class ProcedureCohort(object):
         self.encounters = self.eid
 
         self.offset = self._enc_series(self.procedure_info, 'days_from_dob_procstart','offset').astype(int)
+        self.metrics = CohortMetrics()
 
     def _enc_series(self, df, col, name=None):
         if name is None:
             name = col
         return df[['encounter_id',col]].drop_duplicates().rename(columns={col:name})
-
+    
+    def add_continuous_metric(self, metric):
+        m = metric(db=self.db, encounter_id=self.eid)
+        self.metrics.metrics.append(m)
+        m.__attach__(self.metrics)
+        return self.metrics
+    
+    def align_metric(self,df,time_column='time'):
+        df = df.merge(self.offset, on='encounter_id', how='left')
+        df.time = df.time - pd.to_timedelta(df.offset,unit='day')
+        return df
+    
     @property
     def age(self):
         s = self.encounter_info

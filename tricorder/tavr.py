@@ -55,6 +55,19 @@ class TAVR():
 
         self.medications = Table(os.path.join(self.raw_dir,'Table4_Administered_Medications.csv'))
 
+    def create_procedure_cohort(self, procedures, **kwargs):
+        """Creates a ProcedureCohort object
+        Parameters
+        ----------
+        procedures : list
+            list of order_names to select from procedures table
+            
+        Returns
+        ----------
+        ProcedureCohort
+        """
+        return ProcedureCohort(db=self, procedures=procedures, **kwargs)    
+    
     def sel(self, procedures, labs=None, flowsheet=None, encounter_id=None):
 
         output_col_order = [

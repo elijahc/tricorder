@@ -53,7 +53,7 @@ class SWAN():
 
         self.transfusion = Table(os.path.join(self.raw_dir,'Table5_Blood_Transfusion.csv'))
 
-        self.medications = Table(os.path.join(self.raw_dir,'Table4_Administered_Medications.csv'))
+        self.medications = Table(os.path.join(self.raw_dir,'Table4_Administered_Medication.csv'))
 
     def sel(self, procedures, labs=None, flowsheet=None, encounter_id=None):
 
@@ -86,6 +86,19 @@ class SWAN():
         out_df = pd.concat(out_dfs, sort=True)
         return out_df[output_col_order]
 
+    def create_procedure_cohort(self, procedures, **kwargs):
+        """Creates a ProcedureCohort object
+        Parameters
+        ----------
+        procedures : list
+            list of order_names to select from procedures table
+            
+        Returns
+        ----------
+        ProcedureCohort
+        """
+        return ProcedureCohort(db=self, procedures=procedures, **kwargs)
+    
     @contextmanager
     def cohort(self, procedures=None):
         if procedures is not None:

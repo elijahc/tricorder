@@ -17,14 +17,14 @@ SEARCH_COLS = {
     'Table6_Procedures.csv' : 'order_name',
     'Table7_DX.csv' : 'CodeDescription',
     'Table5_Blood_Transfusion.csv' : 'transfusion_name',
-    'Table4_Administered_Medications.csv' : 'medication_name',
+    'Table4_Administered_Medication.csv' : 'medication_name',
 }
 
 SANITIZE_COLS = {
     'Table1_Encounter_Info.csv': None,
     'Table2_Flowsheet.csv' : ['display_name','flowsheet_value'],
     'Table3_Lab.csv' : ['lab_component_name'],
-    'Table4_Administered_Medications.csv' : ['medication_name'],
+    'Table4_Administered_Medication.csv' : ['medication_name'],
     'Table5_Blood_Transfusion.csv' : ['transfusion_name'],
     'Table6_Procedures.csv' : ['order_name'],
     'Table7_DX.csv' : ['CodeDescription'],

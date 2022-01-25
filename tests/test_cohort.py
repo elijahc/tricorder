@@ -1,11 +1,15 @@
 import pytest
+import os
 import pandas as pd
 from tableone import TableOne
 from tricorder.swan import SWAN, ProcedureCohort
 from tricorder.procedure_codesets import cabg_names
 
+funcs = ['age','gender','offset','mortality']
+
 def cabg_cohort():
-    swan = SWAN('/Users/elijahc/data/compass/SWAN_20210210/')
+    datadir = os.getenv('DEV_DATA_DIR') 
+    swan = SWAN(os.path.join(datadir,'compass','SWAN_20210210'))
     return ProcedureCohort(db=swan, procedures=cabg_names)
 
 pc = cabg_cohort()
@@ -35,12 +39,9 @@ def table1():
     return t1.drop(columns='index').drop_duplicates()
 
 def test_cohort():
+    funcs_and_attrs = dir(pc)
+    for f in funcs:
+        assert f in funcs_and_attrs
 
-    with swan.cohort(procedures=cabg_names) as lens:
-        age = lens.age
-        assert isinstance(age, pd.Series)
-        print(age)
-
-        mortality = lens.mortality
-        assert isinstance(mortality, pd.Series)
-        print(mortality)
+    assert isinstance(pc.mortality, pd.DataFrame)
+    assert isinstance(pc.age, pd.DataFrame)

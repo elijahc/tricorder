@@ -35,7 +35,6 @@ NEW_COLUMNS = {
     },
 }
 
-
 class SWAN():
     def __init__(self, root_dir = '/data/compass/SWAN'):
         self.root = root_dir
@@ -105,3 +104,23 @@ class SWAN():
             yield ProcedureCohort(db=self,procedures=procedures)
         else:
             raise Exception('supply either procedure or')
+            
+class SWANDemo(SWAN):
+    
+    def __init__(self, root_dir = '/datasets/swandemo'):
+        self.root = root_dir
+        self.raw_dir = root_dir
+        
+        self.encounters = Table(os.path.join(self.raw_dir,'Table1_Encounter_Info.csv'))
+
+        self.flowsheet = Table(os.path.join(self.raw_dir, 'Table2_Flowsheet.csv'))
+        
+        self.labs = Table(os.path.join(self.raw_dir, 'Table3_Lab.csv'))
+        
+        self.procedures = Table(os.path.join(self.raw_dir,'Table6_Procedures.csv'))
+
+        self.diagnosis = Table(os.path.join(self.raw_dir,'Table7_DX.csv'))
+
+        self.transfusion = Table(os.path.join(self.raw_dir,'Table5_Blood_Transfusion.csv'))
+
+        self.medications = Table(os.path.join(self.raw_dir,'Table4_Administered_Medication.csv'))

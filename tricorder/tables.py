@@ -98,6 +98,22 @@ class Table(object):
         tab = tab.set_column(tab.column_names.index(column),column,pc.utf8_upper(tab[column]))
         return tab
 
+    def _cast_column(self, tab, column, dtype):
+        """Casts column defined in tab as dtype
+
+        Parameters
+        ----------
+        tab : pyarrrow.Table
+                 Table to use
+        column : str
+                 column of tab to cast
+        dtype : str
+                 dtype to cast column as
+        """
+        assert column in tab.column_names, '{} not in {}'.format(column,tab.column_names)
+        
+        return tab.set_column(tab.column_names.index(column),column,pc.cast(tab[column],'string'))
+
     def partition(self, column=None, overwrite=False):
         """Breaks up dataset into separate files partitioned on column
 
@@ -154,6 +170,7 @@ class Table(object):
 
         for n in tab.column_names:
             if 'days_from' in n or 'days_since' in n:
+                tab = self._cast_column(tab,n,'string')
                 mask = pc.invert(pc.starts_with(tab.column(n),pattern='>'))
                 tab = tab.filter(mask)
 
@@ -165,7 +182,13 @@ class Table(object):
         tab = csv.read_csv(self.file_path)
         if SANITIZE_COLS[self.table_fn] is not None:
             tab = self.sanitize_table(tab)
-        return self._filter_table(tab,**kwargs).to_pandas()
+        
+        # Check if kwargs specifies returning a filtered table
+        return_filtered = pd.Series([k in tab.column_names for k in kwargs.keys()]).any()
+        if return_filtered:
+            return self._filter_table(tab,**kwargs).to_pandas()
+        else:
+            return tab.to_pandas()
 
     def partition_load(self,**kwargs):
         if os.path.exists(self._cache_path('.part')):

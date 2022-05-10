@@ -3,52 +3,7 @@ import pandas as pd
 import seaborn as sns
 import numpy as np
 from scipy.interpolate import interp1d
-
-def tidy_labs(df, hours=False):
-    
-    get_days = lambda d: pd.to_timedelta(d.lab_collection_days_since_birth-d.lab_collection_days_since_birth.min(),unit='day')
-
-    df = df.rename(columns={'lab_component_name':'name','lab_result_value':'value','lab_collection_time':'time'})
-    df.value = pd.to_numeric(df.value,errors='coerce')
-    
-    days = df.lab_collection_days_since_birth.apply(lambda s: pd.to_timedelta(s,unit='day'))
-    
-    df.time = pd.to_timedelta(df.time) + days
-    df = df.dropna()
-    return df[['encounter_id','time','name','value']].sort_values(['encounter_id','time'],ascending=True)
-
-def tidy_flow(df):
-    df = df.rename(columns={'display_name':'name','flowsheet_value':'value','flowsheet_time':'time'})
-    get_days = lambda d: pd.to_timedelta(d.flowsheet_days_since_birth-d.flowsheet_days_since_birth.min(),unit='day')
-
-
-    df.value = pd.to_numeric(df.value,errors='coerce')
-    
-    days = df.flowsheet_days_since_birth.apply(lambda s: pd.to_timedelta(s,unit='day'))
-    
-    df.time = pd.to_timedelta(df.time) + days
-    df = df.dropna()
-    return df[['encounter_id','time','name','value']].sort_values(['encounter_id','time'],ascending=True)
-
-def tidy_meds(df):
-    df = df.rename(columns={'medication_name':'name','dose':'value','administered_time':'time'})
-
-    df.value = pd.to_numeric(df.value,errors='coerce')
-    df.encounter_id = pd.to_numeric(df.encounter_id,errors='coerce')
-    
-    df.administered_days_since_birth = pd.to_numeric(df.administered_days_since_birth, errors='coerce')
-    
-    days = df.administered_days_since_birth.apply(lambda s: pd.to_timedelta(s,unit='day'))
-    
-    df.time = pd.to_timedelta(df.time) + days
-    df = df.dropna()
-    return df[['encounter_id','time','name','value']].sort_values(['encounter_id','time'],ascending=True)
-
-def pivot_tidy(df,t='time'):
-    return df.pivot_table(index=['encounter_id',t],values='value', aggfunc='mean', columns='name')
-
-def melt_tidy(df,t='hour'):
-    return pd.melt(df.reset_index(),id_vars=['encounter_id',t],value_vars=df.reset_index().columns.tolist(),var_name='name')
+from .utils import tidy_labs, tidy_flow, tidy_meds, pivot_tidy, melt_tidy
 
 class Metric(object):
     REQUIRES = {}
@@ -459,7 +414,7 @@ class CardiacPower(Metric):
         
         super(CardiacPower,self).__init__(db, encounter_id)
     
-    def _prep(self, sample=None, encounter_id=None):
+    def _prep(self, sample=None, encounter_id=None, pivot=True):
         if sample is not None and isinstance(sample, int):    
             components = self.db_sample(n=sample).dropna().sort_values(['encounter_id','time'])
         elif sample is not None and isinstance(sample, (list, type(np.array([])), type(pd.Series()))):
@@ -483,18 +438,22 @@ class CardiacPower(Metric):
             eid = df.encounter_id.values[0]
             pbar.set_description('{}'.format(self.__class__.classname))
             cvp_limits = self.__class__.limits['CVP']
-            cvp = df[df.name == 'CVP']
+            cvp = df[df.name == 'CVP'].reset_index(drop=True)
             cvp = cvp[cvp.value <= cvp_limits[-1]]
-            df = pd.concat([df[df.name != 'CVP'],cvp])
-            if len(df.name.value_counts())==3:
-                dfs.append(df)
+            df = pd.concat([df[df.name != 'CVP'].reset_index(drop=True),cvp])
+            # if len(df.name.value_counts())==3:
+            dfs.append(df)
     
         output = pd.concat(dfs)[['value','name','encounter_id','time']]   
-        return pivot_tidy(output, t='time')
+        if pivot:
+            return pivot_tidy(output, t='time')
+        else:
+            return output
     
     def compute(self, sample=None, with_components=False, encounter_id=None):
         pvdf = self._prep(sample=sample, encounter_id=encounter_id)
-        pvdf['Cardiac Power'] = (pvdf['A-LINE MAP']-pvdf.CVP)*pvdf.CCO / 451
+        pvdf['Cardiac Power'] = (pvdf['A-LINE MAP'].interpolate(limit_area='inside')-pvdf.CVP.interpolate(limit_area='inside'))
+        pvdf['Cardiac Power'] = pvdf['Cardiac Power']*pvdf.CCO / 451
         pvdf['Cardiac Power'] = pvdf['Cardiac Power'].interpolate(limit_area='inside')
         df = melt_tidy(pvdf, t='time')
         # df.time = (df.time/(np.timedelta64(1,'D'))*24).values
@@ -507,3 +466,39 @@ class CardiacPower(Metric):
             return out
         else:
             return pvdf
+        
+        
+class VentricularStrokeWorkIndex(CardiacPower):
+    shortname = "VSWi"
+    classname = 'VentricularStrokeWorkIndex'
+    limits = {'CVP':(0,27.12)}
+    REQUIRES = {
+        'flowsheet' : [
+            'A-LINE MAP ', 'A-LINE 2 MAP ',
+            'CVP (MMHG)','PULSE',
+            'CCI','CARDIAC OUTPUT','LVSWI','RVSWI','PAP (MEAN)',
+        ]
+    }
+    
+    def __init__(self, db, encounter_id=None):
+        self.map_names = ['A-LINE MAP ', 'A-LINE 2 MAP ']
+        
+        super(VentricularStrokeWorkIndex,self).__init__(db, encounter_id)
+    
+    def compute(self, sample=None, with_components=False, encounter_id=None):
+        pvdf = self._prep(sample=sample, encounter_id=encounter_id)
+        pvdf['SVi'] = pvdf.CCI.interpolate(limit_area='inside') / pvdf.PULSE.interpolate(limit_area='inside')
+        pvdf['RVSWI'] = (pvdf['PAP (MEAN)'].interpolate(limit_area='inside')-pvdf.CVP)*pvdf.SVi
+        pvdf['RVSWI'] = pvdf['RVSWI'].interpolate(limit_area='inside')
+        df = melt_tidy(pvdf, t='time')
+        # df.time = (df.time/(np.timedelta64(1,'D'))*24).values
+        # df.time = pd.to_timedelta(df.time.round().astype(int),unit='hour')
+        pvdf = pivot_tidy(df,t='time')
+        
+        if not with_components:
+            out = pvdf[['RVSWI']].reset_index().rename(columns={'RVSWI':'value'})
+            out['name'] = 'RVSWI'
+            return out
+        else:
+            return pvdf
+# swan.flowsheet.sel(display_name=swan.flowsheet.search('PAP').values[:-1],encounter_id=pc.eid)

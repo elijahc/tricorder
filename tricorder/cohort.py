@@ -1,9 +1,25 @@
 import numpy as np
 import pandas as pd
+from tqdm.auto import tqdm
+import os
 import json
-from .outcome_metrics import tidy_labs
-from .outcome_utils import mpog_aki
+from .utils import tidy_labs, tidy_flow
+from .outcome_utils import mpog_aki,aki_code_map
 from .codesets_ICD10 import cad,stroke
+from .tables import SEARCH_COLS
+
+blood_product_names = [
+    'TRANSFUSE RBC: 1 UNITS',
+    'TRANSFUSE RBC: 2 UNITS',
+    'TRANSFUSE RBC: 3 UNITS',
+    'TRANSFUSE RBC: 4 UNITS',
+    'TRANSFUSE PLASMA: 1 UNITS',
+    'TRANSFUSE PLASMA: 2 UNITS',
+    'TRANSFUSE PLASMA: 3 UNITS',
+    'TRANSFUSE PLASMA: 4 UNITS',
+    'TRANSFUSE PLATELETS: 1 UNITS',
+    'TRANSFUSE PLATELETS: 2 UNITS',
+]
 
 class CohortMetrics(object):
     def __init__(self):
@@ -30,7 +46,19 @@ class CohortOutcomes(object):
         for o in self._outcomes:
             print('- {}'.format(str(o.__class__.classname)))
         return self.__str__()
-    
+
+class EncounterCohort(object):
+    def __init__(self, db, encounter_id, person_id=None, metrics=[]):
+        self.db = db
+        self.encounter_id = encounter_id
+        self.encounter_info = self.db.encounters.sel(
+            encounter_id = self.encounter_id
+        )
+
+        self.eid = self.encounter_info.encounter_id.unique()
+        self.pid = self.encounter_info.person_id.unique()
+        self.encounters = self.eid
+
 class ProcedureCohort(object):
     def __init__(self, db, procedures, person_id=None, encounter_id=None, metrics=[]):
         self.db = db
@@ -50,6 +78,50 @@ class ProcedureCohort(object):
 
         self.offset = self._enc_series(self.procedure_info, 'days_from_dob_procstart','offset').astype(int)
         self.metrics = CohortMetrics()
+        
+    def _find_required_data(self):
+        from tricorder.procedure_codesets import icu_codes, room_codes
+        proc_codes = icu_codes+room_codes+self.procedures
+
+        required = {
+            'labs':['CREATININE SERUM','TROPONIN I'],
+            'flowsheet':[],
+            'procedures':proc_codes,
+        }
+        
+        for m in self.metrics.metrics:
+            required_vars = m.__class__.REQUIRES
+            for k,v in required_vars.items():
+                if hasattr(self.db,k):
+                    required[k].extend(required_vars[k])
+            
+        required = {k:pd.Series(v).unique().tolist() for k,v in required.items()}
+        return required
+        
+    def _dump_tables(self, dir_path, encounter_id=None):
+        if encounter_id is None:
+            encounter_id = self.eid
+            
+        required_data = self._find_required_data()
+        tables = {
+            self.db.encounters.table_fn : self.encounter_info[self.encounter_info.encounter_id.isin(encounter_id)],
+        }
+        for k,v in required_data.items():
+            if hasattr(self.db,k):
+                t = getattr(self.db,k)
+                query = {
+                    'encounter_id':encounter_id,
+                    t.search_col : v
+                    
+                }
+                tables[t.table_fn] = t.sel(**query)
+        
+        for k,v in tables.items():
+            fp = os.path.join(dir_path,k)
+            print('writing {}'.format(fp))
+            v.to_csv(fp, index=False)
+            
+        return [os.path.join(dir_path,k) for k in tables.keys()]
 
     def _enc_series(self, df, col, name=None):
         if name is None:
@@ -57,13 +129,30 @@ class ProcedureCohort(object):
         return df[['encounter_id',col]].drop_duplicates().rename(columns={col:name})
     
     def add_continuous_metric(self, metric):
+        """Add a custom timevarying metric to the cohort
+        """
         m = metric(db=self.db, encounter_id=self.eid)
         self.metrics.metrics.append(m)
         m.__attach__(self.metrics)
         return self.metrics
     
-    def align_metric(self,df,time_column='time'):
-        df = df.merge(self.offset, on='encounter_id', how='left')
+    def align_metric(self,df,time_column='time',events=None):
+        """Aligns the timevalues a dataframe according to an event
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Dataframe of data to align
+        offset : pd.DataFrame, optional
+            Dataframe of events to align with, must have a encounter_id and offset columns, defaults to procedure day
+        time_column : str
+                 Column name of time values
+        """
+        if events is None:
+            events = self.offset
+        assert 'encounter_id' in list(events.columns), 'events missing "encounter_id" column'
+        assert 'offset' in list(events.columns), 'events missing "offset" column'
+        
+        df = df.merge(events[['encounter_id','offset']], on='encounter_id', how='left')
         df.time = df.time - pd.to_timedelta(df.offset,unit='day')
         return df
     
@@ -74,28 +163,15 @@ class ProcedureCohort(object):
 
     def labs(self,names,dropna=True):
         labs = self.db.labs.sel(lab_component_name=names,encounter_id=self.eid)
-        labs = labs.rename(columns={'lab_result_value':'value',
-                                    'lab_collection_days_since_birth':'day_from_dob',
-                                    'lab_collection_time':'time',
-                                    'lab_component_name':'name'})
-        # Filter erroneous values
-        labs.value = pd.to_numeric(labs['value'],errors='coerce')
-        labs = labs.dropna()
-        
-        labs.day_from_dob = pd.to_numeric(labs.day_from_dob,errors='coerce')
-        
-        # Get day relative to first OR day
-        proc_day = self.offset.groupby('encounter_id').apply(lambda d: d.offset.min()).rename('offset').reset_index()
-        labs = labs.merge(proc_day, how='left',on='encounter_id')
-        labs['day'] = pd.to_numeric(labs.day_from_dob-labs.offset,errors='coerce')
-        labs.time = pd.to_timedelta(labs.time)
-        labs = labs.dropna()
-        labs.time = [t + np.timedelta64(24*int(d),'h') for t,d in zip(labs.time,labs.day)]
-        labs = labs[['encounter_id','offset','day','time','value','lab_result_unit','name',]]
-        return labs
+
+        return tidy_labs(labs)
     
     def preop_labs(self,names):
-        labs = self.labs(names).query('day <=0')
+        labs = self.db.labs.sel(lab_component_name=names)
+        labs = tidy_labs(labs)
+        labs = self.align_metric(labs)
+        labs = labs[labs.time/np.timedelta64(1,'D') <= 0]
+        # .query('day <= 0')
         
         # Get most recent labs from people already in he hospital
         
@@ -124,8 +200,17 @@ class ProcedureCohort(object):
         Generates labels for whether or not the patient had AKI out to 7days postop
         """
         scr = self.labs(['CREATININE SERUM']).query('value <= 25 and value >= 0.2').reset_index()
-        aki = scr.groupby(['encounter_id','offset']).apply(mpog_aki,result_col='value').reset_index()
-        return aki.sort_values(by=['encounter_id','offset'])
+        scr = self.align_metric(scr)
+        grouper  = scr.groupby('encounter_id')
+        pbar = tqdm(grouper)
+        aki = []
+        pbar.set_description('postop_aki')
+        for _,e in pbar:
+            result = mpog_aki(e,result_col='value')
+            aki.append(result)
+        aki = pd.DataFrame({'encounter_id':scr.encounter_id.unique(),'value':aki})
+        aki['desc'] = aki.value.apply(lambda d: aki_code_map[d])
+        return aki
     
     def postop_troponin(self, max_days=3):
         """Postop Troponin (I or T)
@@ -151,11 +236,16 @@ class ProcedureCohort(object):
     
     @property
     def delirium(self):
-        c = self.db.sel(procedures=self.procedures,flowsheet=['CAM ICU'],encounter_id=self.eid)
-        return c
+        c = self.db.flowsheet.sel(display_name=['CAM ICU'],encounter_id=self.eid)
+        return tidy_flow(c, to_numeric=False)
 
     def get_post_op_delirium(self, detail='full', clean=True):
-        c = self.delirium.query('day >= 0.0')
+        # c = self.delirium.query('day >= 0.0')
+        c = self.delirium
+        c = self.align_metric(c)
+        c['days'] = c.time / np.timedelta64(1,'D')
+        c = c.query('days >= 0.0')
+        # c = c[c.time > c.time/np.timedelta64(c.time,'D')]
         if clean:
             c = c[~c.value.isin(['Unable to assess', ''])]
 
@@ -165,7 +255,9 @@ class ProcedureCohort(object):
                 ).rename('post_op_delirium').to_frame().reset_index()
             return self._enc_series(c.drop_duplicates(),'post_op_delirium')
         elif detail == 'full':
-            return self._enc_series(c,'post_op_delirium')
+            c.value = c.value.apply(lambda s: s.split('-')[0])
+            return c
+            # return self._enc_series(c,'post_op_delirium')
         else:
             raise ValueError("for detail use either 'full' or 'encounter'")
 
@@ -228,6 +320,14 @@ class ProcedureCohort(object):
         return c.groupby(['encounter_id','days_from_dob_procstart']).count()
 
     @property
+    def ckd(self):
+        l = self.db.labs.sel(lab_component_name=self.db.labs.search('GFR').values, encounter_id=self.eid)
+        l = co.align_metric(l)
+        l['days'] = l.time/np.timedelta64(1,'D')
+        ckd = l.query('days < 1 & days > -3').groupby('encounter_id').apply(lambda d: (d.value<60).any()).rename('ckd').reset_index()
+        
+        return ckd
+    @property
     def icu_start(self):
         from tricorder.procedure_codesets import icu_codes
         c = self.db.procedures.sel(encounter_id=self.eid,order_name=icu_codes)
@@ -246,16 +346,28 @@ class ProcedureCohort(object):
         c['ICU LOS'] = c.days_from_dob_procstart.astype(int) - c.offset
         c = self.encounter_info.merge(c[['encounter_id','ICU LOS']],how='left',on='encounter_id')
         return c.groupby('encounter_id')['ICU LOS'].max().sort_index().to_frame().reset_index()
-
+        
+    def blood_products(self,kind='RBC'):
+        bp = self.db.transfusion.sel(
+            transfusion_name=self.db.transfusion.search('TRANSFUSE {}:'.format(kind)), 
+            encounter_id=self.eid)
+        bp.number_of_units = bp.number_of_units.apply(lambda s: s.split(' ')[0]).astype(int)
+        bp = bp.rename(columns={
+            'number_of_units':'UNITS {}'.format(kind),
+            # 'transfusion_name':'TRANSFUSE {}'.format(kind)
+        })
+        return self._enc_series(bp,'UNITS {}'.format(kind))
+    
     @property
     def mechanical_ventilation_duration(self):
-        c = self.db.procedures.sel(
+        c = self.db.flowsheet.sel(
             encounter_id=self.eid,
-            order_name=['MECHANICAL VENTILATION'])
-        c = c.merge(self.offset,how='left').drop_duplicates()
-        c['VENT DUR'] = c.days_from_dob_procstart.astype(int) - c.offset
-        c = self.encounter_info.merge(c[['encounter_id','VENT DUR']],how='left',on='encounter_id')
-        return c.groupby('encounter_id')['VENT DUR'].max().sort_index().to_frame().reset_index()
+            display_name=['$ VENT MODE **REQUIRED** '])
+#         c = c.merge(self.offset,how='left').drop_duplicates()
+        c = tidy_flow(c,to_numeric=False)
+        c = self.align_metric(c)
+        c['days'] = c.time/np.timedelta64(1,'D')
+        return c.groupby('encounter_id')['days'].max().sort_index().to_frame().reset_index()
 
     @property
     def osa(self, code_type='ICD-10'):

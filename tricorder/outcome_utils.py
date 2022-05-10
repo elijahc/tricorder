@@ -1,19 +1,30 @@
+import numpy as np
 import pandas as pd
 
+aki_code_map = {
+    -3:'No preoperative creatinine',
+    -1:'No postoperative creatinine',
+    3 :'Stage 3 AKI',
+    2 :'Stage 2 AKI',
+    1 :'Stage 1 AKI',
+    0 :'No AKI',
+}
+
 def mpog_aki(df, result_col='lab_result_value'):
-    if not (df.day<=0).any():
-        return pd.Series(['No preoperative creatinine',-3],['desc','value'])
-    if not (df.day >= 1).any():
-        return pd.Series(['No postoperative creatinine',-1],['desc','value'])
-    cr_basl = df.query('day <= 0')[result_col].mean()
+    df.time = df.time / np.timedelta64(1,'D')
+    if not (df.time<=0).any():
+        return -3
+    if not (df.time >= 1).any():
+        return -1
+    cr_basl = df.query('time <= 0')[result_col].mean()
     
-    cr7dmax = df.query('day > 0 and day <= 7')[result_col].max()
-    cr2dmax = df.query('day > 0 and day <= 2')[result_col].max()
+    cr7dmax = df.query('time > 0 and time <= 7')[result_col].max()
+    cr2dmax = df.query('time > 0 and time <= 2')[result_col].max()
     if cr7dmax >= 3*cr_basl or cr7dmax > 4:
-        return pd.Series(['Stage 3 AKI',3],['desc','value'])
+        return 3
     elif cr7dmax >= 2*cr_basl:
-        return pd.Series(['Stage 2 AKI',2],['desc','value'])
+        return 2
     elif cr7dmax >= 1.5*cr_basl or cr2dmax > cr_basl+0.3:
-        return pd.Series(['Stage 1 AKI',1],['desc','value'])
+        return 1
     else:
-        return pd.Series(['No AKI',0],['desc','value'])
+        return 0

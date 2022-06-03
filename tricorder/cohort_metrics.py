@@ -88,7 +88,7 @@ class Metric(object):
         if len(components) > 1:
             keeps = components[0].encounter_id.unique()
             for d in components[1:]:
-                keeps = np.intersect1d(keeps, d.encounter_id.unique())
+                keeps = np.intersect1d(keeps, d.encounter_id.unique(),assume_unique=True)
                 
             df = pd.concat(components)
             df = df[df.encounter_id.isin(keeps)]
@@ -240,7 +240,7 @@ class OxygenDelivery(Metric):
     REQUIRES = {
         'labs' : [
             'HEMOGLOBIN','HEMOGLOBIN ARTERIAL','HEMOGLOBIN VENOUS',
-            'O2SAT ARTERIAL MEASURED','PO2 ARTERIAL',
+            'O2 SAT ARTERIAL POC','O2SAT ARTERIAL MEASURED','PO2 ARTERIAL',
         ],
         'flowsheet' : [
             'CARDIAC OUTPUT','CCO','CCI',
@@ -249,6 +249,7 @@ class OxygenDelivery(Metric):
     
     def __init__(self, db, encounter_id=None):
         self.hgb_names = ['HEMOGLOBIN','HEMOGLOBIN ARTERIAL','HEMOGLOBIN VENOUS']
+        self.sat_names = ['O2 SAT ARTERIAL POC','O2SAT ARTERIAL MEASURED']
         self.abg_names = ['O2SAT ARTERIAL MEASURED','PO2 ARTERIAL']
         
         super(OxygenDelivery,self).__init__(db, encounter_id)
@@ -261,7 +262,7 @@ class OxygenDelivery(Metric):
         else:
             components = self.db_fetch()
         
-        components['name'] = components['name'].replace({'CARDIAC OUTPUT': 'CCO'})
+        components['name'] = components['name'].replace({'CARDIAC OUTPUT': 'CCO', 'O2 SAT ARTERIAL POC':'O2SAT ARTERIAL POC'})
         grouper = components.groupby('encounter_id')
         pbar = tqdm(grouper)
         
@@ -287,7 +288,8 @@ class OxygenDelivery(Metric):
             out = pd.concat(enc_dfs)
             if out.name.drop_duplicates().str.contains('CC').any() and 'CaO2' in out.name.unique():
                 out['encounter_id']=eid
-                out['hour'] = (out.day*24).round().astype(int)
+                # out['hour'] = (out.day*24).round().astype(int)
+                out['hour'] = (out.day*24).round(1)
                 dfs.append(out)
             
         output = pd.concat(dfs)[['value','name','encounter_id','hour']].pivot_table(
@@ -299,7 +301,7 @@ class OxygenDelivery(Metric):
         df = self.get_components(sample=sample)
         co = df['CCO'].interpolate(limit_area='inside')
         ci = df['CCI'].interpolate(limit_area='inside')
-        ca = df['CaO2'].interpolate(limit_area='inside')
+        ca = df['CaO2'].interpolate(limit_direction='forward')
         df['DO2']   = (10 * co * ca).interpolate(limit_direction='forward')
         df['DO2_I'] = (10 * ci * ca).interpolate(limit_direction='forward')
         if not with_components:

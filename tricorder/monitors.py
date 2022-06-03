@@ -40,11 +40,20 @@ ventilation = [
     'Set Ve (L/min)',
     'Ve (L/min)',
 ]
+ventilator_mode = [
+    'VENT MODE',
+    '$ VENT MODE **REQUIRED** ',
+]
+ventilator_settings = [
+    'SET VE (L/MIN)',
+    'SET INSP PRESS (CMH2O)',
+    'I:E RATIO'
+]
 
 ASA_monitors = [
-    'SpO2',
-    'Temp',
-    'Pulse',
+    'SPO2',
+    'TEMP',
+    'PULSE','HR (ECG)',
 ]
 
 lab_oxygenation = [
@@ -55,14 +64,33 @@ lab_oxygenation = [
     'O2SAT Venous Measured',
 ]
 
-class Flowsheet(object):
-    
+class Pump(object):
     def __init__(self):
-        self.asa_monitors = asa_monitors
+        self.paralytics = [
+            'VOLUME (ML) CISATRACURIUM',
+            'VOLUME (ML) VECURONIUM',
+            'VOLUME (ML) ROCURONIUM',
+        ]
+        self.narcotics = [
+            'VOLUME (ML) HYDROMORPHONE',
+            'VOLUME (ML) FENTANYL',
+            'VOLUME (ML) MORPHINE',
+        ]
+        self.anxiolytics = [
+            'VOLUME (ML) MIDAZOLAM',
+            'VOLUME (ML) LORAZEPAM',
+        ]
+        
+class Flowsheet(object):
+    def __init__(self):
+        self.asa_monitors = [s.upper() for s in ASA_monitors]
         self.ventilation = ventilation
         self.oxygenation = flow_oxygenation
         self.circulatory = circulatory
+        self.gtt = Pump()
         
 class Labs(object):
     def __init__(self):
         self.oxygenation = lab_oxygenation
+        
+flowsets = Flowsheet()

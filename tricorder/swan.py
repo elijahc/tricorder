@@ -53,6 +53,8 @@ class SWAN():
         self.transfusion = Table(os.path.join(self.raw_dir,'Table5_Blood_Transfusion.csv'))
 
         self.medications = Table(os.path.join(self.raw_dir,'Table4_Administered_Medication.csv'))
+        
+        self.tables = ['encounters','flowsheet','labs','procedures','diagnosis','transfusion','medications']
 
     def sel(self, procedures, labs=None, flowsheet=None, encounter_id=None):
 
@@ -91,6 +93,10 @@ class SWAN():
         ----------
         procedures : list
             list of order_names to select from procedures table
+        person_id : list
+            list of person_id's to limit cohort too
+        encounter_id : list
+            list of encounter_id's to limit cohort too
             
         Returns
         ----------

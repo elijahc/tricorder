@@ -136,13 +136,17 @@ class Table(object):
         print('writing partitioned dataset {} sharding on {}'.format(out_dir, column))
         pq.write_to_dataset(tab,root_path=out_dir,partition_cols=[column],)
 
-    def unique(self, column=None, cache=True):
+    def unique(self, column=None, count=True):
         """Returns unique values from the default column (e.g. order_name from procedures)
         """
         column = None or self.default_col
         if self.default_unique is None:
             self.default_unique = csv.read_csv(self.file_path)[column].to_pandas().astype(str).str.upper().unique()
-        return self.default_unique
+            
+        if count:
+            return csv.read_csv(self.file_path)[column].to_pandas().astype(str).str.upper().value_counts()
+        else:
+            return self.default_unique
         
     def search(self, query, column = None):
         """Returns all unique entries of the specified column that match query
@@ -156,7 +160,7 @@ class Table(object):
         if column is None and self.default_col is None:
             raise ValueError('No default search column specified, must provide column to search in column argument')
         elif column is None and self.default_col is not None:
-            series = pd.Series(self.unique())
+            series = pd.Series(self.unique(count=False))
         elif column is not None:
             series = csv.read_csv(self.file_path)[column].to_pandas()
         
@@ -239,6 +243,9 @@ class Table(object):
 
     def columns(self):
         return csv.read_csv(self.file_path,read_options=csv.ReadOptions(skip_rows_after_names=1500)).column_names
+    
+    def head(self):
+        return pd.DataFrame(columns=self.columns())
 
     def _cache_path(self,ext='.parquet'):
         return os.path.join(self.data_root,self.table_fn.split('.')[0]+ext)

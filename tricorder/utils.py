@@ -83,6 +83,17 @@ def tidy_meds(df):
     df = df.dropna()
     return df[['encounter_id','time','name','value']].sort_values(['encounter_id','time'],ascending=True)
 
+def tidy_procs(df,t='time'):
+    df = df.rename(columns={'order_name':'name', 'days_from_dob_procstart':'time'})
+
+    df.encounter_id = pd.to_numeric(df.encounter_id,errors='coerce')
+    df['value'] = df.time.astype(int)
+    df.time = pd.to_numeric(df.time,errors='coerce')
+    df.time = pd.to_timedelta(df.time,unit='day')
+    
+    df = df.dropna()
+    return df[['encounter_id','time','name','value']].sort_values(['encounter_id','time'],ascending=True)
+
 def pivot_tidy(df,t='time'):
     return df.pivot_table(index=['encounter_id',t],values='value', aggfunc='mean', columns='name')
 

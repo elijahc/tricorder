@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
+from tableone import TableOne
 import os
 import json
-from .utils import tidy_labs, tidy_flow
+from .utils import tidy_labs, tidy_flow, tidy_procs
 from .outcome_utils import mpog_aki,aki_code_map
 from .codesets_ICD10 import cad,stroke
 from .tables import SEARCH_COLS
@@ -20,6 +21,23 @@ blood_product_names = [
     'TRANSFUSE PLATELETS: 1 UNITS',
     'TRANSFUSE PLATELETS: 2 UNITS',
 ]
+
+def cohort_tableone(co,missing=True,overall=True,**kwargs):
+    kwargs['missing'] = missing
+    kwargs['overall'] = overall
+    cols = [
+        co.age,
+        co.gender,
+        co.bmi,
+        co.mortality,
+        co.icu_los,
+    ]
+    t1 = cols[0]
+    for c in cols[1:]:
+        t1 = t1.merge(c,how='outer',on='encounter_id')
+    
+    tab1 = TableOne(t1,columns=t1.columns[1:].tolist(),**kwargs)
+    return tab1
 
 class CohortMetrics(object):
     def __init__(self):
@@ -76,7 +94,8 @@ class ProcedureCohort(object):
         self.pid = self.encounter_info.person_id.unique()
         self.encounters = self.eid
 
-        self.offset = self._enc_series(self.procedure_info, 'days_from_dob_procstart','offset').astype(int)
+        self._offset = self._enc_series(self.procedure_info, 'days_from_dob_procstart','offset').astype(int)
+        self.offset = self._offset
         self.metrics = CohortMetrics()
         
     def _find_required_data(self):
@@ -98,6 +117,14 @@ class ProcedureCohort(object):
         required = {k:pd.Series(v).unique().tolist() for k,v in required.items()}
         return required
         
+    def set_offset(self, df):
+        assert 'encounter_id' in df.columns
+        assert 'offset' in df.columns
+        
+        self.offset = df[['encounter_id','offset']]
+        print('updated offset to:')
+        return self.offset.head()
+    
     def _dump_tables(self, dir_path, encounter_id=None):
         if encounter_id is None:
             encounter_id = self.eid
@@ -160,12 +187,22 @@ class ProcedureCohort(object):
     def age(self):
         s = self.encounter_info
         return self._enc_series(s,'age')
-
+        
     def labs(self,names,dropna=True):
         labs = self.db.labs.sel(lab_component_name=names,encounter_id=self.eid)
 
         return tidy_labs(labs)
+
+    def flowsheet(self,names, dropna=True, to_numeric=True):
+        tab = self.db.flowsheet.sel(display_name=names,encounter_id=self.eid)
+
+        return tidy_flow(tab, to_numeric=to_numeric)
     
+    def procs(self, names, dropna=True):
+        tab = self.db.procedures.sel(order_name=names,encounter_id=self.eid)
+
+        return tidy_procs(tab)
+        
     def preop_labs(self,names):
         labs = self.db.labs.sel(lab_component_name=names)
         labs = tidy_labs(labs)
@@ -176,7 +213,7 @@ class ProcedureCohort(object):
         # Get most recent labs from people already in he hospital
         
         return labs
-        
+    
     @property
     def mortality(self):
         return self._enc_series(self.encounter_info,'death_during_encounter', 'death')
@@ -254,12 +291,18 @@ class ProcedureCohort(object):
                 lambda r: (r=='Delirious- CAM+').any()
                 ).rename('post_op_delirium').to_frame().reset_index()
             return self._enc_series(c.drop_duplicates(),'post_op_delirium')
+        elif detail == '72hr':
+            c = c.groupby('encounter_id').apply(
+                lambda r: ((r.value=='Delirious- CAM+') & (r.days<=3)).any()
+                ).rename('post_op_delirium').to_frame().reset_index()
+            
+            return self._enc_series(c.drop_duplicates(),'post_op_delirium')
         elif detail == 'full':
             c.value = c.value.apply(lambda s: s.split('-')[0])
             return c
             # return self._enc_series(c,'post_op_delirium')
         else:
-            raise ValueError("for detail use either 'full' or 'encounter'")
+            raise ValueError("for detail use either 'full', '72hr', or 'encounter'")
 
     def or_days(self):
         from tricorder.procedure_codesets import or_room_codes
@@ -362,7 +405,8 @@ class ProcedureCohort(object):
     def mechanical_ventilation_duration(self):
         c = self.db.flowsheet.sel(
             encounter_id=self.eid,
-            display_name=['$ VENT MODE **REQUIRED** '])
+            display_name=['VENT MODE','$ VENT MODE **REQUIRED** '])
+        c.display_name = 'VENT MODE'
 #         c = c.merge(self.offset,how='left').drop_duplicates()
         c = tidy_flow(c,to_numeric=False)
         c = self.align_metric(c)
@@ -417,3 +461,6 @@ class ProcedureCohort(object):
         c = c.groupby('person_id').Code.apply(lambda s: s.isin(stroke).any()).rename('value')
         c = self.encounter_info.merge(c.reset_index(),how='left',on='person_id').drop_duplicates().astype({'value':int})
         return self._enc_series(c,'value','stroke')
+        
+    def export(self, path, **kwargs):
+        pass
